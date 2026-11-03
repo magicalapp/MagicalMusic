@@ -3,7 +3,6 @@ package com.magicalstory.music.adapter;
 import android.animation.AnimatorSet;
 import android.animation.ObjectAnimator;
 import android.content.Context;
-import android.text.TextUtils;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -16,18 +15,13 @@ import androidx.core.content.ContextCompat;
 import androidx.media3.common.util.UnstableApi;
 import androidx.recyclerview.widget.RecyclerView;
 
-import com.bumptech.glide.Glide;
-import com.bumptech.glide.load.resource.bitmap.RoundedCorners;
-import com.bumptech.glide.request.RequestOptions;
 import com.magicalstory.music.MainActivity;
 import com.magicalstory.music.R;
 import com.magicalstory.music.databinding.ItemPlaylistGridBinding;
-import com.magicalstory.music.dialog.PlaylistBottomSheetDialogFragment;
+import com.magicalstory.music.dialog.SonglistBottomSheetDialogFragment;
 import com.magicalstory.music.model.Playlist;
 import com.magicalstory.music.model.Song;
 import com.magicalstory.music.utils.glide.Glide2;
-
-import org.litepal.LitePal;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -311,7 +305,7 @@ public class PlaylistGridAdapter extends RecyclerView.Adapter<PlaylistGridAdapte
      */
     private void showPlaylistBottomSheet(Playlist playlist) {
         if (context instanceof MainActivity) {
-            PlaylistBottomSheetDialogFragment fragment = PlaylistBottomSheetDialogFragment.newInstance(playlist);
+            SonglistBottomSheetDialogFragment fragment = SonglistBottomSheetDialogFragment.newInstance(playlist);
             fragment.show(((MainActivity) context).getSupportFragmentManager(), "PlaylistBottomSheet");
             Log.d(TAG, "显示歌单底部弹窗: " + playlist.getName());
         }

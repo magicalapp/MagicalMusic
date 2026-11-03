@@ -32,6 +32,47 @@
                 app:backgroundTint="@color/md_theme_surfaceContainer"
                 app:layout_scrollFlags="scroll" />
 
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content">
+
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/button_scan_music"
+                    style="@style/Widget.Material3.Button.OutlinedButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="50dp"
+
+                    android:layout_marginStart="@dimen/margin_20"
+                    android:layout_marginEnd="5dp"
+
+                    android:layout_weight="1"
+                    android:text="@string/scan_music"
+                    android:textColor="@color/primary_color"
+                    app:backgroundTint="@color/md_theme_surfaceContainerLow"
+                    app:cornerRadius="6dp"
+                    app:icon="@drawable/ic_scan"
+                    app:iconTint="@color/primary_color"
+                    app:strokeColor="@color/primary_color" />
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/button_about_app"
+                    style="@style/Widget.Material3.Button.OutlinedButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="50dp"
+                    android:layout_marginStart="5dp"
+                    android:layout_marginEnd="@dimen/margin_20"
+                    android:layout_weight="1"
+                    android:text="关于应用"
+                    android:textColor="@color/primary_color"
+                    app:backgroundTint="@color/md_theme_surfaceContainerLow"
+                    app:cornerRadius="6dp"
+                    app:icon="@drawable/ic_about"
+                    app:iconTint="@color/primary_color"
+                    app:strokeColor="@color/primary_color" />
+
+            </LinearLayout>
+
             <!-- 我的歌曲 -->
             <LinearLayout
                 android:id="@+id/layout_my_songs"

@@ -1,5 +1,18 @@
 package com.magicalstory.music.homepage;
 
+import android.Manifest;
+import android.content.BroadcastReceiver;
+import android.content.ComponentName;
+import android.content.Context;
+import android.content.Intent;
+import android.content.IntentFilter;
+import android.content.ServiceConnection;
+import android.content.pm.PackageManager;
+import android.net.Uri;
+import android.os.Build;
+import android.os.Bundle;
+import android.os.IBinder;
+import android.provider.DocumentsContract;
 import android.text.TextUtils;
 import android.view.Gravity;
 import android.view.LayoutInflater;
@@ -8,6 +21,11 @@ import android.view.ViewGroup;
 import android.os.Handler;
 import android.os.Looper;
 
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
+import androidx.annotation.NonNull;
+import androidx.core.content.ContextCompat;
+import androidx.localbroadcastmanager.content.LocalBroadcastManager;
 import androidx.media3.common.util.UnstableApi;
 import androidx.navigation.Navigation;
 import androidx.recyclerview.widget.LinearLayoutManager;
@@ -28,6 +46,9 @@ import com.magicalstory.music.model.Album;
 import com.magicalstory.music.model.Artist;
 import com.magicalstory.music.model.Playlist;
 import com.magicalstory.music.utils.screen.DensityUtil;
+import com.magicalstory.music.dialog.dialogUtils;
+import com.magicalstory.music.service.MusicScanService;
+import com.magicalstory.music.utils.app.ToastUtils;
 
 import org.litepal.LitePal;
 
@@ -40,7 +61,6 @@ import com.magicalstory.music.model.FavoriteSong;
 import com.magicalstory.music.utils.glide.CoverFallbackUtils;
 import com.magicalstory.music.service.CoverFetchService;
 
-import android.os.Bundle;
 import android.util.Log;
 
 @UnstableApi
@@ -59,6 +79,44 @@ public class LibraryFragment extends BaseFragment<FragmentLibraryBinding> {
     // 网络请求相关
     private ExecutorService executorService;
     private Handler mainHandler;
+
+    // 扫描相关
+    private MusicScanService musicScanService;
+    private boolean serviceBound = false;
+    private ActivityResultLauncher<String[]> permissionLauncher;
+    private ActivityResultLauncher<Intent> safLauncher;
+
+    // 扫描完成广播接收器
+    private final BroadcastReceiver scanCompleteReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            Log.d("LibraryFragment", "收到广播: " + intent.getAction());
+            if (MusicScanService.ACTION_SCAN_COMPLETE.equals(intent.getAction())) {
+                int scanCount = intent.getIntExtra(MusicScanService.EXTRA_SCAN_COUNT, 0);
+                Log.d("LibraryFragment", "扫描完成广播，新增歌曲数量: " + scanCount);
+                ToastUtils.showToast(getContext(), "扫描完成，新增 " + scanCount + " 首歌曲");
+                // 扫描完成后重新加载歌曲并显示布局
+                reloadMusicDataAndShowLayout();
+                // 关闭进度对话框
+                dialogUtils.getInstance().dismissProgressDialog();
+            }
+        }
+    };
+
+    // 服务连接
+    private final ServiceConnection serviceConnection = new ServiceConnection() {
+        @Override
+        public void onServiceConnected(ComponentName name, IBinder service) {
+            MusicScanService.MusicScanBinder binder = (MusicScanService.MusicScanBinder) service;
+            musicScanService = binder.getService();
+            serviceBound = true;
+        }
+
+        @Override
+        public void onServiceDisconnected(ComponentName name) {
+            serviceBound = false;
+        }
+    };
 
     @Override
     protected FragmentLibraryBinding getViewBinding(LayoutInflater inflater, ViewGroup container) {
@@ -83,6 +141,10 @@ public class LibraryFragment extends BaseFragment<FragmentLibraryBinding> {
     @Override
     protected void initViewForPersistentView() {
         super.initViewForPersistentView();
+        // 初始化权限请求启动器
+        initPermissionLauncher();
+        // 初始化SAF启动器
+        initSafLauncher();
         // 初始化视图
         setupSearchView();
         // 初始化RecyclerView
@@ -99,11 +161,30 @@ public class LibraryFragment extends BaseFragment<FragmentLibraryBinding> {
         // 初始化Handler和线程池
         mainHandler = new Handler(Looper.getMainLooper());
         executorService = Executors.newCachedThreadPool();
+
+        // 绑定服务
+        Intent serviceIntent = new Intent(getContext(), MusicScanService.class);
+        context.bindService(serviceIntent, serviceConnection, Context.BIND_AUTO_CREATE);
+
+        // 注册广播接收器
+        registerScanCompleteReceiver();
     }
     
     @Override
     protected void initListenerForPersistentView() {
         super.initListenerForPersistentView();
+
+        // 关于应用按钮点击事件
+        binding.buttonAboutApp.setOnClickListener(v -> {
+            // 跳转到关于应用页面
+            navigateToAboutApp();
+        });
+
+        // 扫描媒体按钮点击事件
+        binding.buttonScanMusic.setOnClickListener(v -> {
+            // 开始SAF授权扫描
+            startSafScan();
+        });
 
         // 我的歌曲标题点击事件
         binding.itemHeaderMySongs.setOnClickListener(v -> {
@@ -642,6 +723,187 @@ public class LibraryFragment extends BaseFragment<FragmentLibraryBinding> {
         Navigation.findNavController(requireView()).navigate(R.id.action_library_to_artists, bundle);
     }
 
+    /**
+     * 初始化权限请求启动器
+     */
+    private void initPermissionLauncher() {
+        permissionLauncher = registerForActivityResult(
+                new ActivityResultContracts.RequestMultiplePermissions(),
+                result -> {
+                    boolean allGranted = true;
+                    for (Boolean granted : result.values()) {
+                        if (!granted) {
+                            allGranted = false;
+                            break;
+                        }
+                    }
+
+                    if (allGranted) {
+                        // 权限已授予，开始扫描
+                        startMusicScan();
+                    } else {
+                        // 权限被拒绝
+                        ToastUtils.showToast(getContext(), "需要存储权限才能扫描音乐文件");
+                    }
+                }
+        );
+    }
+
+    /**
+     * 初始化SAF启动器
+     */
+    private void initSafLauncher() {
+        safLauncher = registerForActivityResult(
+                new ActivityResultContracts.StartActivityForResult(),
+                result -> {
+                    if (result.getResultCode() == android.app.Activity.RESULT_OK && result.getData() != null) {
+                        Uri uri = result.getData().getData();
+                        if (uri != null) {
+                            // 获取SAF权限，开始扫描
+                            startMusicScanWithSaf(uri);
+                        }
+                    } else {
+                        dialogUtils.getInstance().dismissProgressDialog();
+                        ToastUtils.showToast(getContext(), "未选择文件夹或权限被拒绝");
+                    }
+                }
+        );
+    }
+
+    /**
+     * 开始SAF授权扫描
+     */
+    private void startSafScan() {
+        // 显示进度对话框
+        dialogUtils.getInstance().showProgressDialog(getContext(), "正在准备扫描...");
+        
+        // 创建SAF Intent
+        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);
+        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+        
+        // 启动SAF选择器
+        safLauncher.launch(intent);
+    }
+
+    /**
+     * 使用SAF权限开始扫描
+     */
+    private void startMusicScanWithSaf(Uri uri) {
+        try {
+            // 获取持久权限
+            final int takeFlags = Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION;
+            getContext().getContentResolver().takePersistableUriPermission(uri, takeFlags);
+            
+            // 更新进度对话框
+            dialogUtils.getInstance().changeProgressDialogText("正在扫描音乐文件...");
+            
+            // 开始扫描
+            if (serviceBound && musicScanService != null) {
+                if (!musicScanService.isScanning()) {
+                    musicScanService.startMusicScan();
+                }
+            } else {
+                // 服务未绑定，直接启动服务
+                Intent serviceIntent = new Intent(getContext(), MusicScanService.class);
+                getContext().startService(serviceIntent);
+            }
+            
+        } catch (Exception e) {
+            Log.e("LibraryFragment", "SAF扫描失败: " + e.getMessage(), e);
+            dialogUtils.getInstance().dismissProgressDialog();
+            ToastUtils.showToast(getContext(), "扫描失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 开始音乐扫描
+     */
+    private void startMusicScan() {
+        // 显示进度对话框
+        dialogUtils.getInstance().showProgressDialog(getContext(), "正在扫描音乐文件...");
+        
+        if (serviceBound && musicScanService != null) {
+            if (!musicScanService.isScanning()) {
+                musicScanService.startMusicScan();
+            }
+        } else {
+            // 服务未绑定，直接启动服务
+            Intent serviceIntent = new Intent(getContext(), MusicScanService.class);
+            getContext().startService(serviceIntent);
+        }
+    }
+
+    /**
+     * 注册扫描完成广播接收器
+     */
+    private void registerScanCompleteReceiver() {
+        try {
+            IntentFilter filter = new IntentFilter(MusicScanService.ACTION_SCAN_COMPLETE);
+            LocalBroadcastManager.getInstance(getContext()).registerReceiver(scanCompleteReceiver, filter);
+            Log.d("LibraryFragment", "扫描完成广播接收器注册成功");
+        } catch (Exception e) {
+            Log.e("LibraryFragment", "注册扫描完成广播接收器失败: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * 重新加载歌曲数据并显示布局
+     */
+    private void reloadMusicDataAndShowLayout() {
+        // 在后台线程中重新加载数据
+        if (executorService == null) {
+            executorService = Executors.newCachedThreadPool();
+        }
+
+        executorService.execute(() -> {
+            try {
+                // 检查数据库中是否有音乐数据
+                boolean hasMusicData = LitePal.count("song") > 0;
+
+                // 回到主线程更新UI
+                if (mainHandler != null) {
+                    mainHandler.post(() -> {
+                        if (hasMusicData) {
+                            // 有音乐数据，隐藏空布局，加载音乐数据
+                            binding.layoutEmpty.setVisibility(View.GONE);
+                            loadMusicData();
+                        } else {
+                            // 没有音乐数据，显示空布局，隐藏其他列表
+                            binding.layoutEmpty.setVisibility(View.VISIBLE);
+                            hideAllMusicLists();
+                        }
+                    });
+                }
+            } catch (Exception e) {
+                Log.e("LibraryFragment", "Error reloading music data: " + e.getMessage(), e);
+                // 发生错误时，回到主线程显示空布局
+                if (mainHandler != null) {
+                    mainHandler.post(() -> {
+                        binding.layoutEmpty.setVisibility(View.VISIBLE);
+                        hideAllMusicLists();
+                    });
+                }
+            }
+        });
+    }
+
+    /**
+     * 隐藏所有音乐列表
+     */
+    private void hideAllMusicLists() {
+        binding.layoutMySongs.setVisibility(View.GONE);
+        binding.layoutMyAlbums.setVisibility(View.GONE);
+        binding.layoutMyArtists.setVisibility(View.GONE);
+    }
+
+    /**
+     * 跳转到关于应用页面
+     */
+    private void navigateToAboutApp() {
+        // 使用Navigation组件进行跳转到关于页面
+        Navigation.findNavController(requireView()).navigate(R.id.action_library_to_about);
+    }
+
     @Override
     public void onResume() {
         super.onResume();
@@ -674,6 +936,26 @@ public class LibraryFragment extends BaseFragment<FragmentLibraryBinding> {
         }
         if (myArtistsAdapter != null) {
             myArtistsAdapter = null;
+        }
+
+        // 注销广播接收器
+        try {
+            if (getContext() != null) {
+                LocalBroadcastManager.getInstance(getContext()).unregisterReceiver(scanCompleteReceiver);
+                Log.d("LibraryFragment", "广播接收器注销成功");
+            }
+        } catch (Exception e) {
+            Log.e("LibraryFragment", "注销广播接收器失败: " + e.getMessage(), e);
+        }
+
+        // 解绑服务
+        if (serviceBound) {
+            try {
+                getContext().unbindService(serviceConnection);
+                serviceBound = false;
+            } catch (Exception e) {
+                Log.e("LibraryFragment", "解绑服务失败: " + e.getMessage(), e);
+            }
         }
     }
 

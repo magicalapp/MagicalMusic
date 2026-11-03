@@ -214,4 +214,5 @@
     <string name="composer">作曲家</string>
     <string name="network_search">联网搜索</string>
     <string name="text_name">名称</string>
+    <string name="scan_music">扫描媒体</string>
 </resources>

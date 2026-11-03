@@ -9,7 +9,6 @@ import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.drawable.GradientDrawable;
-import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
@@ -30,7 +29,6 @@ import androidx.media3.common.MediaItem;
 import androidx.media3.common.PlaybackException;
 import androidx.media3.common.Player;
 import androidx.media3.common.util.UnstableApi;
-import androidx.navigation.Navigation;
 import androidx.localbroadcastmanager.content.LocalBroadcastManager;
 
 
@@ -41,6 +39,7 @@ import com.bumptech.glide.request.transition.Transition;
 import com.magicalstory.music.MainActivity;
 import com.magicalstory.music.R;
 import com.magicalstory.music.dialog.PlaylistBottomSheetDialogFragment;
+import com.magicalstory.music.dialog.SonglistBottomSheetDialogFragment;
 import com.magicalstory.music.dialog.SongBottomSheetDialogFragment;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.google.android.material.button.MaterialButton;
@@ -1370,10 +1369,7 @@ public class FullPlayerFragment extends BaseFragment<FragmentFullPlayerBinding> 
             return;
         }
 
-        // 注意：新的PlaylistBottomSheetDialogFragment显示的是菜单项，不是播放列表
-        // 这里需要根据实际需求来决定是否显示播放列表
-        // 暂时注释掉，因为新的实现是菜单项而不是播放列表
-        /*
+
         // 创建播放列表底部弹出窗口Fragment
         playlistBottomSheet = PlaylistBottomSheetDialogFragment.newInstance();
         playlistBottomSheet.setMediaControllerHelper(controllerHelper);
@@ -1406,7 +1402,7 @@ public class FullPlayerFragment extends BaseFragment<FragmentFullPlayerBinding> 
 
         // 显示播放列表Fragment
         playlistBottomSheet.show(getParentFragmentManager(), "PlaylistBottomSheet");
-        */
+
     }
 
     /**

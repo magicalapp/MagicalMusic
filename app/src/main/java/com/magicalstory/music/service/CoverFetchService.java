@@ -193,7 +193,7 @@ public class CoverFetchService extends IntentService {
             if (TextUtils.isEmpty(artist.getCoverUrl()) && !artist.isCoverFetched()) {
                 Log.d(TAG, "处理歌手封面: " + artist.getArtistName() + " (" + processedCount + "/" + artists.size() + ")");
                 if (singerName.contains(artist.getArtistName().split(";")[0])) {
-                    artist.setCoverUrl("https://cdn.magicalapk.com/singerCover/singerCover/" + artist.getArtistName().split(";")[0] + ".png");
+                    artist.setCoverUrl("https://cdn.harmony5.cn/singerCover/singerCover/" + artist.getArtistName().split(";")[0] + ".png");
                     artist.setCoverFetched(true);
                     System.out.println("歌手 = " + artist.getArtistName() + " 有CDN封面");
                     successCount++;
